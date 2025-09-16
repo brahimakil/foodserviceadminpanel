@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["*"],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization", "Cache-Control", "Content-Disposition", "x-goog-meta-*"],
+    "maxAgeSeconds": 3600
+  }
+]
