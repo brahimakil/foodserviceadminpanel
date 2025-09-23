@@ -18,16 +18,17 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useProducts, useCategories, useBrands, useBanners, useAdmins } from "@/hooks/useFirebase";
+import { productService, categoryService, brandService, bannerService } from "@/services/firebase";
 
 const Settings = () => {
   const [loading, setLoading] = useState<string | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
 
   // Get all data for export
-  const { data: products = [] } = useProducts();
-  const { data: categories = [] } = useCategories();
-  const { data: brands = [] } = useBrands();
-  const { data: banners = [] } = useBanners();
+  const { data: products = [], refetch: refetchProducts } = useProducts();
+  const { data: categories = [], refetch: refetchCategories } = useCategories();
+  const { data: brands = [], refetch: refetchBrands } = useBrands();
+  const { data: banners = [], refetch: refetchBanners } = useBanners();
   const { data: admins = [] } = useAdmins();
 
   const exportData = async (dataType: string, data: any[], filename: string) => {
@@ -74,16 +75,97 @@ const Settings = () => {
       if (!Array.isArray(data)) {
         throw new Error('Invalid file format: Expected an array');
       }
+
+      if (data.length === 0) {
+        throw new Error('No data found in the file');
+      }
       
-      // Here you would implement the actual import logic to Firebase
-      // For now, just simulate the process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Import data to Firebase based on type
+      switch (dataType) {
+        case 'products':
+          // Validate product structure
+          const validProducts = data.map(item => {
+            if (!item.title || !item.description || !item.category) {
+              throw new Error('Invalid product data: title, description, and category are required');
+            }
+            return {
+              title: item.title,
+              description: item.description,
+              category: item.category,
+              image: item.image || '',
+              price: item.price || 0,
+              isBestSeller: item.isBestSeller || false,
+              status: item.status || 'active'
+            };
+          });
+          await productService.bulkCreate(validProducts);
+          refetchProducts();
+          break;
+          
+        case 'categories':
+          // Validate category structure
+          const validCategories = data.map(item => {
+            if (!item.name || !item.description) {
+              throw new Error('Invalid category data: name and description are required');
+            }
+            return {
+              name: item.name,
+              description: item.description,
+              image: item.image || '',
+              productCount: item.productCount || 0,
+              status: item.status || 'active'
+            };
+          });
+          await categoryService.bulkCreate(validCategories);
+          refetchCategories();
+          break;
+          
+        case 'brands':
+          const validBrands = data.map(item => {
+            if (!item.name || !item.description) {
+              throw new Error('Invalid brand data: name and description are required');
+            }
+            return {
+              name: item.name,
+              description: item.description,
+              logo: item.logo || '',
+              status: item.status || 'active'
+            };
+          });
+          await brandService.bulkCreate(validBrands);
+          refetchBrands();
+          break;
+          
+        case 'banners':
+          const validBanners = data.map(item => {
+            if (!item.title || !item.image || !item.type || !item.page) {
+              throw new Error('Invalid banner data: title, image, type, and page are required');
+            }
+            return {
+              title: item.title,
+              image: item.image,
+              type: item.type,
+              page: item.page,
+              position: item.position || '',
+              isActive: item.isActive !== false,
+              order: item.order || 0,
+              link: item.link || ''
+            };
+          });
+          await bannerService.bulkCreate(validBanners);
+          refetchBanners();
+          break;
+          
+        default:
+          throw new Error(`Import not supported for ${dataType}`);
+      }
       
       toast({
         title: "Import Successful",
         description: `${data.length} ${dataType} records imported successfully`,
       });
     } catch (error) {
+      console.error('Import error:', error);
       toast({
         title: "Import Failed",
         description: `Failed to import ${dataType} data: ${error instanceof Error ? error.message : 'Unknown error'}`,

@@ -109,6 +109,24 @@ class FirebaseService<T> {
       updatedAt: doc.data().updatedAt?.toDate(),
     })) as T[];
   }
+
+  // Add bulk import method
+  async bulkCreate(items: Omit<T, 'id' | 'createdAt' | 'updatedAt'>[]): Promise<void> {
+    const batch = writeBatch(db);
+    const now = Timestamp.now();
+    
+    items.forEach((item) => {
+      const cleanedData = cleanData(item);
+      const docRef = doc(collection(db, this.collectionName));
+      batch.set(docRef, {
+        ...cleanedData,
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+    
+    await batch.commit();
+  }
 }
 
 // Product Service
