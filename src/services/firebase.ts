@@ -10,7 +10,8 @@ import {
   where, 
   orderBy, 
   Timestamp,
-  writeBatch
+  writeBatch,
+  setDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadProductImage, uploadCategoryImage, uploadBrandImage, uploadBannerImage, uploadFile, deleteFile } from "@/lib/storage";
@@ -135,6 +136,22 @@ export class ProductService extends FirebaseService<Product> {
     super('products');
   }
 
+  private async updateCategoryProductCount(categoryId: string, increment: number): Promise<void> {
+    if (!categoryId) return;
+    
+    const categoryRef = doc(db, 'categories', categoryId);
+    const categoryDoc = await getDoc(categoryRef);
+    
+    if (categoryDoc.exists()) {
+      const currentCount = categoryDoc.data().productCount || 0;
+      const newCount = Math.max(0, currentCount + increment);
+      await updateDoc(categoryRef, { 
+        productCount: newCount,
+        updatedAt: Timestamp.now()
+      });
+    }
+  }
+
   async createWithImage(data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>, imageFile?: File): Promise<string> {
     let imageUrl = data.image || "";
     
@@ -148,10 +165,20 @@ export class ProductService extends FirebaseService<Product> {
       image: imageUrl || undefined, // Only include if not empty
     });
 
-    return this.create(productData);
+    const productId = await this.create(productData);
+    
+    // Update category product count
+    if (data.category) {
+      await this.updateCategoryProductCount(data.category, 1);
+    }
+    
+    return productId;
   }
 
   async updateWithImage(id: string, data: Partial<Omit<Product, 'id' | 'createdAt'>>, imageFile?: File): Promise<void> {
+    // Get the current product to check if category changed
+    const currentProduct = await this.getById(id);
+    
     let updateData = { ...data };
     
     if (imageFile) {
@@ -159,7 +186,36 @@ export class ProductService extends FirebaseService<Product> {
       updateData.image = imageUrl;
     }
 
-    return this.update(id, updateData);
+    await this.update(id, updateData);
+    
+    // Handle category changes
+    if (data.category !== undefined && currentProduct) {
+      const oldCategory = currentProduct.category;
+      const newCategory = data.category;
+      
+      if (oldCategory !== newCategory) {
+        // Decrease count for old category
+        if (oldCategory) {
+          await this.updateCategoryProductCount(oldCategory, -1);
+        }
+        // Increase count for new category
+        if (newCategory) {
+          await this.updateCategoryProductCount(newCategory, 1);
+        }
+      }
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    // Get the product to find its category before deletion
+    const product = await this.getById(id);
+    
+    await super.delete(id);
+    
+    // Decrease category product count
+    if (product && product.category) {
+      await this.updateCategoryProductCount(product.category, -1);
+    }
   }
 
   async getByCategory(categoryId: string): Promise<Product[]> {
@@ -202,6 +258,47 @@ export class CategoryService extends FirebaseService<Category> {
 
     updateData.updatedAt = new Date();
     return this.update(id, updateData);
+  }
+
+  // Method to recalculate product counts for all categories
+  async recalculateProductCounts(): Promise<void> {
+    const categories = await this.getAll();
+    const batch = writeBatch(db);
+
+    for (const category of categories) {
+      // Count products in this category
+      const productsQuery = query(
+        collection(db, 'products'),
+        where('category', '==', category.id)
+      );
+      const productsSnapshot = await getDocs(productsQuery);
+      const productCount = productsSnapshot.size;
+
+      // Update category with correct count
+      const categoryRef = doc(db, 'categories', category.id);
+      batch.update(categoryRef, {
+        productCount,
+        updatedAt: Timestamp.now()
+      });
+    }
+
+    await batch.commit();
+  }
+
+  // Method to recalculate product count for a specific category
+  async recalculateProductCount(categoryId: string): Promise<void> {
+    const productsQuery = query(
+      collection(db, 'products'),
+      where('category', '==', categoryId)
+    );
+    const productsSnapshot = await getDocs(productsQuery);
+    const productCount = productsSnapshot.size;
+
+    const categoryRef = doc(db, 'categories', categoryId);
+    await updateDoc(categoryRef, {
+      productCount,
+      updatedAt: Timestamp.now()
+    });
   }
 }
 
@@ -298,6 +395,36 @@ export class AdminService extends FirebaseService<Admin> {
   async getByEmail(email: string): Promise<Admin | null> {
     const admins = await this.query('email', '==', email);
     return admins.length > 0 ? admins[0] : null;
+  }
+
+  async getByUID(uid: string): Promise<Admin | null> {
+    try {
+      const docRef = doc(db, this.collectionName, uid);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        } as Admin;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting admin by UID:', error);
+      return null;
+    }
+  }
+
+  async createWithUID(uid: string, data: Omit<Admin, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+    const now = Timestamp.now();
+    const cleanedData = cleanData({
+      ...data,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const docRef = doc(db, this.collectionName, uid);
+    await setDoc(docRef, cleanedData);
   }
 }
 

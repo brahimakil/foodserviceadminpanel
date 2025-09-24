@@ -28,8 +28,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       if (firebaseUser) {
-        // Get admin data from Firestore
-        const admin = await adminService.getByEmail(firebaseUser.email!);
+        // Get admin data from Firestore using UID
+        const admin = await adminService.getByUID(firebaseUser.uid);
         if (admin && admin.status === 'active') {
           setUser({
             id: admin.id,
@@ -64,8 +64,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Create admin record in Firestore
-      await adminService.create({
+      // Create admin record in Firestore using UID as document ID
+      await adminService.createWithUID(userCredential.user.uid, {
         name,
         email,
         status: 'active'

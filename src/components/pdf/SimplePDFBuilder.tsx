@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useProducts, useCategories } from "@/hooks/useFirebase";
 import { Product, Category, PDFCatalog, PDFCategoryOrder, PDFProductOrder } from "@/types";
-import { FileText, Image, Download, Upload, X } from "lucide-react";
+import { FileText, Image, Download, Upload, X, RefreshCw } from "lucide-react";
 import { pdfCatalogService } from "@/services/firebase";
 import { generatePDF } from "@/services/pdfGenerator";
 
@@ -35,33 +35,129 @@ const SimplePDFBuilder = ({ catalog, onUpdate }: SimplePDFBuilderProps) => {
   const coverFileRef = useRef<HTMLInputElement>(null);
   const secondFileRef = useRef<HTMLInputElement>(null);
 
-  // Update local state when catalog prop changes
+  // Replace the problematic useEffect with a simple, safe one
   useEffect(() => {
-    setCurrentCoverPage(catalog.coverPage);
-    setCurrentSecondPage(catalog.backPage);
-  }, [catalog.coverPage, catalog.backPage]);
-
-  // Initialize categories if empty
-  useEffect(() => {
-    if (selectedCategories.length === 0 && categories.length > 0) {
-      const initialCategories = categories
-        .filter(cat => cat.status === 'active')
-        .map((cat, index) => ({
+    // Only initialize if we have no selected categories and we have data
+    if (selectedCategories.length === 0 && categories.length > 0 && products.length > 0) {
+      console.log('🔄 Initial PDF catalog setup...');
+      
+      const activeCategories = categories.filter(cat => cat.status === 'active');
+      
+      const initialCategories = activeCategories.map((cat, index) => {
+        const categoryProducts = products
+          .filter(p => p.category === cat.id && p.status === 'active');
+        
+        const productOrders = categoryProducts.map((product, idx) => ({
+          productId: product.id,
+          order: idx + 1,
+          included: true,
+        }));
+        
+        return {
           categoryId: cat.id,
           categoryName: cat.name,
           order: index + 1,
           newPageStart: true,
-          products: products
-            .filter(p => p.category === cat.id && p.status === 'active')
-            .map((product, idx) => ({
-              productId: product.id,
-              order: idx + 1,
-              included: true,
-            }))
-        }));
+          products: productOrders
+        };
+      });
+      
+      console.log('✅ Initialized PDF catalog with', initialCategories.length, 'categories');
       setSelectedCategories(initialCategories);
+      onUpdate({ categories: initialCategories });
     }
-  }, [categories, products, selectedCategories.length]);
+  }, [categories, products]); // Remove onUpdate from dependencies to prevent loops
+
+  // Add a separate useEffect to handle updates when data changes
+  useEffect(() => {
+    // Only update if we already have selected categories and the data has changed
+    if (selectedCategories.length > 0 && categories.length > 0 && products.length > 0) {
+      console.log('🔄 Checking for data changes...');
+      
+      const activeCategories = categories.filter(cat => cat.status === 'active');
+      
+      // Check if we need to update by comparing current data with selected categories
+      const needsUpdate = activeCategories.some(cat => {
+        const existingCategory = selectedCategories.find(sc => sc.categoryId === cat.id);
+        if (!existingCategory) return true; // New category
+        
+        const categoryProducts = products.filter(p => p.category === cat.id && p.status === 'active');
+        const existingProductIds = existingCategory.products.map(p => p.productId);
+        const currentProductIds = categoryProducts.map(p => p.id);
+        
+        // Check if products changed
+        return JSON.stringify(existingProductIds.sort()) !== JSON.stringify(currentProductIds.sort());
+      });
+      
+      if (needsUpdate) {
+        console.log('🔄 Updating PDF catalog due to data changes...');
+        
+        // Update existing categories and add new ones
+        const updatedCategories = activeCategories.map((cat, index) => {
+          const categoryProducts = products
+            .filter(p => p.category === cat.id && p.status === 'active');
+          
+          // Find existing category configuration
+          const existingCategory = selectedCategories.find(sc => sc.categoryId === cat.id);
+          
+          const productOrders = categoryProducts.map((product, idx) => {
+            // Try to preserve existing product configuration
+            const existingProduct = existingCategory?.products.find(p => p.productId === product.id);
+            return {
+              productId: product.id,
+              order: existingProduct?.order || idx + 1,
+              included: existingProduct?.included !== undefined ? existingProduct.included : true,
+            };
+          });
+          
+          return {
+            categoryId: cat.id,
+            categoryName: cat.name,
+            order: existingCategory?.order || index + 1,
+            newPageStart: existingCategory?.newPageStart !== undefined ? existingCategory.newPageStart : true,
+            products: productOrders
+          };
+        });
+        
+        console.log('✅ Updated catalog with', updatedCategories.length, 'categories');
+        setSelectedCategories(updatedCategories);
+        onUpdate({ categories: updatedCategories });
+      }
+    }
+  }, [categories, products, selectedCategories]); // Keep selectedCategories but add change detection
+
+  // Manual refresh function for when you add/edit categories or products
+  const refreshCatalogStructure = () => {
+    console.log('🔄 Manual refresh of catalog structure...');
+    
+    const activeCategories = categories.filter(cat => cat.status === 'active');
+    
+    const refreshedCategories = activeCategories.map((cat, index) => {
+      const categoryProducts = products
+        .filter(p => p.category === cat.id && p.status === 'active');
+      
+      console.log(`📦 Category "${cat.name}" has ${categoryProducts.length} products`);
+      
+      const productOrders = categoryProducts.map((product, idx) => ({
+        productId: product.id,
+        order: idx + 1,
+        included: true,
+      }));
+      
+      return {
+        categoryId: cat.id,
+        categoryName: cat.name,
+        order: index + 1,
+        newPageStart: true,
+        products: productOrders
+      };
+    });
+    
+    console.log('✅ Refreshed catalog with', refreshedCategories.length, 'categories');
+    setSelectedCategories(refreshedCategories);
+    onUpdate({ categories: refreshedCategories });
+  };
+
 
   const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -258,7 +354,7 @@ const SimplePDFBuilder = ({ catalog, onUpdate }: SimplePDFBuilderProps) => {
               >
                 {isGenerating ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4"></div>
                     Generating...
                   </>
                 ) : (
@@ -414,7 +510,18 @@ const SimplePDFBuilder = ({ catalog, onUpdate }: SimplePDFBuilderProps) => {
       {/* Categories and Products */}
       <Card>
         <CardHeader>
-          <CardTitle>Categories & Products Organization</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Categories & Products Organization</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshCatalogStructure}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh Categories
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[600px]">

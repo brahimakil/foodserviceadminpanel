@@ -147,6 +147,38 @@ export const useDeleteCategory = () => {
   });
 };
 
+export const useRecalculateProductCounts = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: () => categoryService.recalculateProductCounts(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      toast.success('Product counts recalculated successfully');
+    },
+    onError: (error) => {
+      console.error('Failed to recalculate product counts:', error);
+      toast.error('Failed to recalculate product counts');
+    },
+  });
+};
+
+export const useRecalculateCategoryProductCount = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (categoryId: string) => categoryService.recalculateProductCount(categoryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      toast.success('Category product count updated successfully');
+    },
+    onError: (error) => {
+      console.error('Failed to update category product count:', error);
+      toast.error('Failed to update category product count');
+    },
+  });
+};
+
 // Brands
 export const useBrands = () => {
   return useQuery({
