@@ -14,9 +14,7 @@ import {
   Users,
   Loader2,
   CheckCircle,
-  AlertCircle,
-  RefreshCw,
-  Calculator
+  AlertCircle
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { 
@@ -24,8 +22,7 @@ import {
   useCategories, 
   useBrands, 
   useBanners, 
-  useAdmins,
-  useRecalculateProductCounts 
+  useAdmins
 } from "@/hooks/useFirebase";
 import { productService, categoryService, brandService, bannerService } from "@/services/firebase";
 
@@ -39,25 +36,6 @@ const Settings = () => {
   const { data: brands = [], refetch: refetchBrands } = useBrands();
   const { data: banners = [], refetch: refetchBanners } = useBanners();
   const { data: admins = [] } = useAdmins();
-
-  // Recalculation hook
-  const recalculateProductCounts = useRecalculateProductCounts();
-
-  const handleRecalculateProductCounts = async () => {
-    try {
-      await recalculateProductCounts.mutateAsync();
-      toast({
-        title: "Success",
-        description: "Product counts recalculated successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to recalculate product counts",
-        variant: "destructive",
-      });
-    }
-  };
 
   const exportData = async (dataType: string, data: any[], filename: string) => {
     setLoading(dataType);
@@ -271,66 +249,7 @@ const Settings = () => {
         </div>
       </div>
 
-      {/* Database Maintenance */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Database Maintenance
-          </CardTitle>
-          <CardDescription>
-            Perform maintenance operations to ensure data consistency
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="border rounded-lg p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-muted rounded-lg">
-                  <Tags className="h-5 w-5" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="font-medium">Recalculate Category Product Counts</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Updates the productCount field for all categories by counting actual products assigned to each category
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{categories.length} categories</Badge>
-                    <Badge variant="outline" className="text-blue-600">
-                      <RefreshCw className="w-3 h-3 mr-1" />
-                      Maintenance
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRecalculateProductCounts}
-                disabled={recalculateProductCounts.isPending}
-              >
-                {recalculateProductCounts.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Calculator className="mr-2 h-4 w-4" />
-                )}
-                {recalculateProductCounts.isPending ? 'Recalculating...' : 'Recalculate'}
-              </Button>
-            </div>
-          </div>
-          
-          <div className="p-4 bg-muted rounded-lg">
-            <h4 className="font-medium mb-2">Maintenance Notes:</h4>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Product count recalculation will scan all products and update category counts</li>
-              <li>• This operation is safe and will not delete any data</li>
-              <li>• Run this if you notice incorrect product counts in categories</li>
-              <li>• The operation may take a few seconds for large datasets</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+
 
       {/* System Information */}
       <Card>

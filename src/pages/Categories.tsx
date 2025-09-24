@@ -47,7 +47,7 @@ import {
   Eye,
   EyeOff
 } from "lucide-react";
-import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from "@/hooks/useFirebase";
+import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory, useProducts } from "@/hooks/useFirebase";
 import { uploadImage } from "@/lib/storage";
 import { toast } from "@/hooks/use-toast";
 import type { Category } from "@/types";
@@ -68,9 +68,23 @@ const Categories = () => {
 
   // Queries and mutations
   const { data: categories = [], isLoading: categoriesLoading } = useCategories();
+  const { data: products = [] } = useProducts();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
+
+  // Helper function to calculate real-time product count for a category
+  const getProductCount = (categoryId: string) => {
+    const category = categories.find(cat => cat.id === categoryId);
+    if (!category) return 0;
+    
+    return products.filter(product => {
+      if (product.status !== 'active') return false;
+      
+      // Handle both cases: product.category could be either category ID or category name
+      return product.category === categoryId || product.category === category.name;
+    }).length;
+  };
 
   // Filter categories
   const filteredCategories = categories.filter(category => {
@@ -305,7 +319,7 @@ const Categories = () => {
                     <TableCell className="text-muted-foreground max-w-xs truncate">
                       {category.description}
                     </TableCell>
-                    <TableCell>{category.productCount || 0}</TableCell>
+                    <TableCell>{getProductCount(category.id)}</TableCell>
                     <TableCell>
                       <Badge 
                         variant={category.status === 'active' ? 'default' : 'destructive'}

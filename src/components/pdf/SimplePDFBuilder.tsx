@@ -35,6 +35,16 @@ const SimplePDFBuilder = ({ catalog, onUpdate }: SimplePDFBuilderProps) => {
   const coverFileRef = useRef<HTMLInputElement>(null);
   const secondFileRef = useRef<HTMLInputElement>(null);
 
+  // Helper function to get products for a category (handles both ID and name)
+  const getProductsForCategory = (category: Category) => {
+    return products.filter(product => {
+      if (product.status !== 'active') return false;
+      
+      // Handle both cases: product.category could be either category ID or category name
+      return product.category === category.id || product.category === category.name;
+    });
+  };
+
   // Replace the problematic useEffect with a simple, safe one
   useEffect(() => {
     // Only initialize if we have no selected categories and we have data
@@ -44,8 +54,7 @@ const SimplePDFBuilder = ({ catalog, onUpdate }: SimplePDFBuilderProps) => {
       const activeCategories = categories.filter(cat => cat.status === 'active');
       
       const initialCategories = activeCategories.map((cat, index) => {
-        const categoryProducts = products
-          .filter(p => p.category === cat.id && p.status === 'active');
+        const categoryProducts = getProductsForCategory(cat);
         
         const productOrders = categoryProducts.map((product, idx) => ({
           productId: product.id,
@@ -81,7 +90,7 @@ const SimplePDFBuilder = ({ catalog, onUpdate }: SimplePDFBuilderProps) => {
         const existingCategory = selectedCategories.find(sc => sc.categoryId === cat.id);
         if (!existingCategory) return true; // New category
         
-        const categoryProducts = products.filter(p => p.category === cat.id && p.status === 'active');
+        const categoryProducts = getProductsForCategory(cat);
         const existingProductIds = existingCategory.products.map(p => p.productId);
         const currentProductIds = categoryProducts.map(p => p.id);
         
@@ -94,8 +103,7 @@ const SimplePDFBuilder = ({ catalog, onUpdate }: SimplePDFBuilderProps) => {
         
         // Update existing categories and add new ones
         const updatedCategories = activeCategories.map((cat, index) => {
-          const categoryProducts = products
-            .filter(p => p.category === cat.id && p.status === 'active');
+          const categoryProducts = getProductsForCategory(cat);
           
           // Find existing category configuration
           const existingCategory = selectedCategories.find(sc => sc.categoryId === cat.id);
@@ -133,8 +141,7 @@ const SimplePDFBuilder = ({ catalog, onUpdate }: SimplePDFBuilderProps) => {
     const activeCategories = categories.filter(cat => cat.status === 'active');
     
     const refreshedCategories = activeCategories.map((cat, index) => {
-      const categoryProducts = products
-        .filter(p => p.category === cat.id && p.status === 'active');
+      const categoryProducts = getProductsForCategory(cat);
       
       console.log(`📦 Category "${cat.name}" has ${categoryProducts.length} products`);
       

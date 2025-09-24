@@ -77,11 +77,47 @@ const Products = () => {
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
 
-  // Filter products
+  // Create a category map for efficient lookups (like retro-react-refresh)
+  const categoryMap = categories.reduce((map, category) => {
+    map[category.id] = category.name;
+    map[category.name] = category.name; // Also map name to name for direct matches
+    return map;
+  }, {} as Record<string, string>);
+
+  // Improved getCategoryName function to handle both ID and name
+  const getCategoryName = (categoryIdOrName: string) => {
+    if (!categoryIdOrName) return 'No Category';
+    
+    // First try to find by ID
+    const categoryById = categories.find(cat => cat.id === categoryIdOrName);
+    if (categoryById) return categoryById.name;
+    
+    // Then try to find by name (for cases where category field stores name instead of ID)
+    const categoryByName = categories.find(cat => cat.name === categoryIdOrName);
+    if (categoryByName) return categoryByName.name;
+    
+    // If it's already a valid category name, return it
+    if (categoryMap[categoryIdOrName]) return categoryIdOrName;
+    
+    return 'Unknown Category';
+  };
+
+  // Filter products - improved to handle both category ID and name
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+    
+    // Handle category filtering for both ID and name
+    let matchesCategory = selectedCategory === "all";
+    if (!matchesCategory) {
+      // Check if product.category matches selectedCategory (could be ID or name)
+      matchesCategory = product.category === selectedCategory ||
+                       // Also check if the category name matches (for cases where product.category is a name)
+                       categories.find(cat => cat.id === selectedCategory)?.name === product.category ||
+                       // Or if the category ID matches (for cases where product.category is an ID)
+                       categories.find(cat => cat.name === selectedCategory)?.id === product.category;
+    }
+    
     return matchesSearch && matchesCategory;
   });
 
@@ -162,11 +198,6 @@ const Products = () => {
     if (confirm('Are you sure you want to delete this product?')) {
       await deleteProduct.mutateAsync(id);
     }
-  };
-
-  const getCategoryName = (categoryId: string) => {
-    const category = categories.find(cat => cat.id === categoryId);
-    return category?.name || 'Unknown Category';
   };
 
   return (
