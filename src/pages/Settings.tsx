@@ -14,7 +14,8 @@ import {
   Users,
   Loader2,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Brain
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { 
@@ -25,6 +26,7 @@ import {
   useAdmins
 } from "@/hooks/useFirebase";
 import { productService, categoryService, brandService, bannerService } from "@/services/firebase";
+import AITesting from "@/components/AITesting";
 
 const Settings = () => {
   const [loading, setLoading] = useState<string | null>(null);
@@ -245,11 +247,12 @@ const Settings = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">System Settings</h1>
-          <p className="text-muted-foreground">Manage system information and database operations</p>
+          <p className="text-muted-foreground">Manage system information, database operations, and AI testing</p>
         </div>
       </div>
 
-
+      {/* AI Testing Section - Add this before System Information */}
+      <AITesting />
 
       {/* System Information */}
       <Card>
