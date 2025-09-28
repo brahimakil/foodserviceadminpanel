@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useProducts, useCategories, useBrands } from "@/hooks/useFirebase";
+import { useSettings, useUpdateSettings } from "@/hooks/useSettings";
 
 interface AIResponse {
   type: 'product' | 'category' | 'brand' | 'unknown' | 'general';
@@ -33,7 +34,7 @@ interface AIResponse {
 }
 
 const AITesting = () => {
-  const [geminiApiKey, setGeminiApiKey] = useState(localStorage.getItem('gemini-api-key') || '');
+  const [localApiKey, setLocalApiKey] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [textQuery, setTextQuery] = useState('');
@@ -45,10 +46,30 @@ const AITesting = () => {
   const { data: products = [] } = useProducts();
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
+  
+  // Get settings from database
+  const { data: settings } = useSettings();
+  const updateSettings = useUpdateSettings();
 
-  const handleApiKeyChange = (value: string) => {
-    setGeminiApiKey(value);
-    localStorage.setItem('gemini-api-key', value);
+  // Initialize local API key from database
+  useEffect(() => {
+    if (settings?.geminiApiKey) {
+      setLocalApiKey(settings.geminiApiKey);
+    }
+  }, [settings]);
+
+  const handleApiKeyChange = async (value: string) => {
+    setLocalApiKey(value);
+    
+    // Save to database immediately
+    try {
+      await updateSettings.mutateAsync({
+        geminiApiKey: value,
+        aiEnabled: value.length > 0,
+      });
+    } catch (error) {
+      console.error('Failed to save API key:', error);
+    }
   };
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -78,7 +99,7 @@ const AITesting = () => {
   };
 
   const testGeminiConnection = async () => {
-    if (!geminiApiKey) {
+    if (!localApiKey) {
       toast({
         title: "API Key Required",
         description: "Please enter your Gemini API key first",
@@ -93,7 +114,7 @@ const AITesting = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-goog-api-key': geminiApiKey,
+          'X-goog-api-key': localApiKey,
         },
         body: JSON.stringify({
           contents: [{
@@ -107,6 +128,13 @@ const AITesting = () => {
       if (response.ok) {
         const data = await response.json();
         const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        // Save working API key to database
+        await updateSettings.mutateAsync({
+          geminiApiKey: localApiKey,
+          aiEnabled: true,
+        });
+        
         toast({
           title: "Connection Successful",
           description: `Gemini 2.0 Flash API is working: ${responseText}`,
@@ -128,7 +156,7 @@ const AITesting = () => {
   };
 
   const analyzeWithAI = async () => {
-    if (!geminiApiKey) {
+    if (!localApiKey) {
       toast({
         title: "API Key Required",
         description: "Please enter your Gemini API key first",
@@ -257,7 +285,7 @@ Respond in JSON format:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-goog-api-key': geminiApiKey,
+          'X-goog-api-key': localApiKey, // Use localApiKey here
         },
         body: JSON.stringify({
           contents: [{
@@ -336,13 +364,13 @@ Respond in JSON format:
             <Input
               id="gemini-key"
               type="password"
-              placeholder="Enter your Gemini API key (X-goog-api-key)"
-              value={geminiApiKey}
+              placeholder="Enter your Gemini API key (will be saved to database)"
+              value={localApiKey}
               onChange={(e) => handleApiKeyChange(e.target.value)}
             />
             <Button 
               onClick={testGeminiConnection} 
-              disabled={testConnection || !geminiApiKey}
+              disabled={testConnection || !localApiKey}
               variant="outline"
             >
               {testConnection ? (
@@ -350,11 +378,12 @@ Respond in JSON format:
               ) : (
                 <Key className="h-4 w-4" />
               )}
-              Test
+              Test & Save
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Get your API key from Google AI Studio. Using Gemini 2.0 Flash model for better performance.
+            API key is saved to the database and will be available for customer AI assistant.
+            {settings?.aiEnabled && <span className="text-green-600 font-medium"> ✓ AI is enabled for customers</span>}
           </p>
         </div>
 
@@ -439,7 +468,7 @@ Respond in JSON format:
               {/* Send Button */}
               <Button 
                 onClick={analyzeWithAI} 
-                disabled={isAnalyzing || (!textQuery && !selectedImage) || !geminiApiKey}
+                disabled={isAnalyzing || (!textQuery && !selectedImage) || !localApiKey}
                 size="sm"
               >
                 {isAnalyzing ? (
