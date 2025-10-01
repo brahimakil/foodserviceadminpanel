@@ -202,11 +202,7 @@ const PDFPreview = ({ catalog }: PDFPreviewProps) => {
                                 </p>
                               )}
                               <div className="flex items-center justify-between">
-                                {product.price && (
-                                  <span className="font-bold text-lg text-green-600">
-                                    ${product.price}
-                                  </span>
-                                )}
+                             
                                 {product.isBestSeller && (
                                   <Badge className="bg-yellow-500 text-white">
                                     BEST SELLER

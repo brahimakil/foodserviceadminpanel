@@ -64,6 +64,16 @@ const PREDEFINED_BANNER_SLOTS = [
     location: 'Products page header'
   },
   {
+    id: 'brands-hero',
+    name: 'Brands Page Hero',
+    type: 'hero' as const,
+    page: 'brands' as const,
+    position: 'Brands Hero',
+    description: 'Hero banner on brands page',
+    dimensions: '1400×480px',
+    location: 'Brands page header'
+  },
+  {
     id: 'about-hero',
     name: 'About Page Hero',
     type: 'hero' as const,
@@ -111,6 +121,7 @@ const Banners = () => {
   const [selectedBanner, setSelectedBanner] = useState<Banner | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<typeof PREDEFINED_BANNER_SLOTS[0] | null>(null);
   
+  // Update the state to handle multiple images
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -122,7 +133,9 @@ const Banners = () => {
     link: "",
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]); // Add multiple images
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]); // Add multiple previews
 
   // Queries and mutations
   const { data: banners = [], isLoading: bannersLoading } = useBanners();
@@ -151,14 +164,26 @@ const Banners = () => {
         link: formData.link?.trim() || "",
         description: formData.description?.trim() || "",
         image: "",
+        images: [] as string[],
       };
 
       if (selectedBanner) {
         // Update existing banner
+        if (formData.type === 'footer' && imageFiles.length > 0) {
+          // Upload multiple images for footer
+          const imageUrls = await Promise.all(
+            imageFiles.map(file => uploadImage(file, 'banners'))
+          );
+          bannerData.images = imageUrls;
+        } else if (imageFile) {
+          // Single image for other types
+          const imageUrl = await uploadImage(imageFile, 'banners');
+          bannerData.image = imageUrl;
+        }
+
         await updateBanner.mutateAsync({
           id: selectedBanner.id,
           data: bannerData,
-          imageFile: imageFile || undefined
         });
         toast({
           title: "Success",
@@ -166,9 +191,35 @@ const Banners = () => {
         });
       } else {
         // Create new banner
+        if (formData.type === 'footer') {
+          if (imageFiles.length === 0) {
+            toast({
+              title: "Error",
+              description: "Please upload at least one image (up to 3)",
+              variant: "destructive",
+            });
+            return;
+          }
+          // Upload multiple images for footer
+          const imageUrls = await Promise.all(
+            imageFiles.map(file => uploadImage(file, 'banners'))
+          );
+          bannerData.images = imageUrls;
+        } else {
+          if (!imageFile) {
+            toast({
+              title: "Error",
+              description: "Please upload a banner image",
+              variant: "destructive",
+            });
+            return;
+          }
+          const imageUrl = await uploadImage(imageFile, 'banners');
+          bannerData.image = imageUrl;
+        }
+
         await createBanner.mutateAsync({
           data: bannerData,
-          imageFile: imageFile || undefined
         });
         toast({
           title: "Success",
@@ -202,6 +253,9 @@ const Banners = () => {
       link: banner.link || "",
     });
     setImagePreview(banner.image || "");
+    setImagePreviews(banner.images || []); // Set multiple previews
+    setImageFile(null); // Clear single image file
+    setImageFiles([]); // Clear multiple image files
     setIsEditOpen(true);
   };
 
@@ -219,6 +273,9 @@ const Banners = () => {
       link: "",
     });
     setImagePreview("");
+    setImagePreviews([]);
+    setImageFile(null);
+    setImageFiles([]);
     setIsEditOpen(true);
   };
 
@@ -261,16 +318,34 @@ const Banners = () => {
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // For footer banners, allow multiple images (up to 3)
+    if (formData.type === 'footer') {
+      const newFiles = Array.from(files);
+      
+      // Add to existing files, but limit to 3 total
+      const combinedFiles = [...imageFiles, ...newFiles].slice(0, 3);
+      setImageFiles(combinedFiles);
+      
+      // Generate previews for all files
+      const previews = combinedFiles.map(file => URL.createObjectURL(file));
+      setImagePreviews(previews);
+      
+      // Clear the input so the same file can be selected again
+      e.target.value = '';
+    } else {
+      // Single image for other banner types
+      const file = files[0];
       setImageFile(file);
-      const reader = new FileReader();
-      reader.onload = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(file);
+      setImagePreview(URL.createObjectURL(file));
     }
   };
 
   const resetForm = () => {
+    setSelectedBanner(null);
+    setSelectedSlot(null);
     setFormData({
       title: "",
       description: "",
@@ -282,9 +357,9 @@ const Banners = () => {
       link: "",
     });
     setImageFile(null);
+    setImageFiles([]);
     setImagePreview("");
-    setSelectedBanner(null);
-    setSelectedSlot(null);
+    setImagePreviews([]);
   };
 
   return (
@@ -558,23 +633,124 @@ const Banners = () => {
             </div>
 
             {/* Image Upload */}
-            <div>
-              <Label htmlFor="image">Banner Image</Label>
-              <div className="space-y-3">
-                <Input
-                  id="image"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                />
-                {imagePreview && (
-                  <img 
-                    src={imagePreview} 
-                    alt="Preview" 
-                    className="w-full max-h-40 object-cover rounded"
+            <div className="space-y-2">
+              <Label htmlFor="image">
+                {formData.type === 'footer' ? 'Banner Images (up to 3)' : 'Banner Image'}
+              </Label>
+              
+              {formData.type === 'footer' ? (
+                // Multiple image upload for footer
+                <>
+                  {/* Show existing images when editing */}
+                  {selectedBanner?.images && selectedBanner.images.length > 0 && imagePreviews.length === 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-muted-foreground mb-2">Current Images:</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {selectedBanner.images.map((img, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={img}
+                              alt={`Current ${index + 1}`}
+                              className="w-full h-24 object-cover rounded border"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Multiple Image Previews */}
+                  {imagePreviews.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Selected Images ({imagePreviews.length}/3):
+                      </p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {imagePreviews.map((preview, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={preview}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-24 object-cover rounded border"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute top-1 right-1 h-6 w-6"
+                              onClick={() => {
+                                const newFiles = imageFiles.filter((_, i) => i !== index);
+                                const newPreviews = imagePreviews.filter((_, i) => i !== index);
+                                setImageFiles(newFiles);
+                                setImagePreviews(newPreviews);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Upload Button - Only show if less than 3 images */}
+                  {imagePreviews.length < 3 && (
+                    <div>
+                      <Input
+                        id="image"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="cursor-pointer"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {imagePreviews.length > 0 
+                          ? `Add ${3 - imagePreviews.length} more image(s). Recommended: 300×200px each`
+                          : 'Upload 1-3 images. Recommended: 300×200px each'
+                        }
+                      </p>
+                    </div>
+                  )}
+
+                  {imagePreviews.length === 3 && (
+                    <p className="text-xs text-green-600 font-medium">
+                      ✓ Maximum 3 images selected
+                    </p>
+                  )}
+                </>
+              ) : (
+                // Single image upload for other types
+                <>
+                  <Input
+                    id="image"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="cursor-pointer"
                   />
-                )}
-              </div>
+                  {selectedSlot && (
+                    <p className="text-xs text-muted-foreground">
+                      Recommended size: {selectedSlot.dimensions}
+                    </p>
+                  )}
+                  
+                  {/* Single Image Preview */}
+                  {imagePreview && (
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-full h-32 object-cover rounded border mt-2"
+                    />
+                  )}
+                  {selectedBanner?.image && !imagePreview && (
+                    <img
+                      src={selectedBanner.image}
+                      alt="Current banner"
+                      className="w-full h-32 object-cover rounded border mt-2"
+                    />
+                  )}
+                </>
+              )}
             </div>
 
             {/* Active Status */}

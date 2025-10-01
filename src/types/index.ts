@@ -3,6 +3,7 @@ export interface Product {
   title: string;
   description: string;
   category: string;
+  brand?: string; // Add optional brand field
   image?: string;
   price?: number;
   isBestSeller: boolean;
@@ -36,12 +37,14 @@ export interface Banner {
   id: string;
   title: string;
   image: string;
+  images?: string[]; // Add support for multiple images (for footer banners)
   type: 'hero' | 'section' | 'sidebar' | 'footer';
   page: 'home' | 'products' | 'about' | 'contact' | 'all';
   position: string;
   isActive: boolean;
   order: number;
   link?: string;
+  description?: string;
   createdAt: Date;
   updatedAt: Date;
 }
